@@ -1,5 +1,5 @@
 # hiring-exercises
-# langue
+# language
 ruby
 
 # run
