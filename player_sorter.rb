@@ -33,65 +33,65 @@ def player_sorter
 
   p "Processing...."
 
-  teams = []
-  CSV.foreach('Teams.csv', headers: true) do |team|
-    keys = ["teamID", "name"]
-    teams << Hash[keys.zip([team[2], team[11]])]
-  end
+  teams = {}
+  CSV.foreach('Teams.csv', headers: true) { |team| teams[team[2]] = team[11] }
+
+  filter = params[1]&.strip
+  filter_value = params[2]&.strip
 
   begin
-    players = []
-    keys = ["playerID", "yearID", "stint", "teamID", "AB", "H"]
-    CSV.foreach(params.first, headers: true) do |row|
-      player = Hash[keys.zip([row[0], row[1], row[2], row[3], row[6], row[8]])]
-      team = teams.find { |team| team["teamID"] == player["teamID"] }
-      player["Team name(s)"] = team["name"]
-      player["Batting Average"] = calculate_ba(player["H"].to_f, player["AB"].to_f)
+    players = {}
+    keys = ["playerID", "yearID", "stint", "Team name(s)", "Batting Average"]
 
-      players << player
+    CSV.foreach(params.first, headers: true) do |row|
+      id = row[0]
+      year = row[1]
+      stint = row[2].to_i
+      ba = calculate_ba(row[8].to_f, row[6].to_f)
+      team_name = teams[row[3]]
+
+      if filter && filter_value
+        next if filter_value != year && filter == "year"
+        next if filter_value != team_name && filter == "team name"
+
+        filtered_year = filter_value.split(',')[0]&.strip
+        filtered_team_name = filter_value.split(',')[1]&.strip
+
+        next if (filtered_year != year || filtered_team_name != team_name) && filter == "year and team name"
+      end
+
+      if stint > 1 && players[id] && players[id][year]
+        current_ba = players[id][year]["Batting Average"]
+        calculated_new_ba = (current_ba * players[id][year]["stint"] + ba) / (players[id][year]["stint"] + 1)
+        players[id][year]["Team name(s)"] = players[id][year]["Team name(s)"] + ", " + team_name
+        players[id][year]["Batting Average"] = calculated_new_ba.round(3)
+        players[id][year]["stint"] = players[id][year]["stint"] + 1
+        next
+      end
+
+      stint_hash = Hash[keys.zip([id, year, 1, team_name, ba])]
+      player_year = { year => stint_hash }
+      players[id] ? players[id].merge!(player_year) : players[id] = player_year
     end
   rescue
     p "Please send correct file path"
     exit
   end
 
-  filter = params[1]&.strip
-  filter_value = params[2]&.strip
-  if filter && filter_value
-    case filter
-    when "year"
-      players.delete_if { |player|  player["yearID"] != filter_value }
-    when "team name"
-      players.delete_if { |player|  player["Team name(s)"].strip != filter_value }
-    when "year and team name"
-      year = filter_value.split(',')[0]&.strip
-      team_name = filter_value.split(',')[1]&.strip
-      players.delete_if { |player| (player["yearID"] != year) || (player["Team name(s)"].strip != team_name) }
-    else
-      p "Use correct filter name if you want to filter results"
-    end
-  end
-
-  players.each do |player|
-    next if player["stint"] == "1"
-
-    stint_players = players.select { |h| h["yearID"] == player["yearID"] && h["playerID"] == player["playerID"] }
-    ba_avg = (stint_players.map { |h| h["Batting Average"] }.sum) / stint_players.length
-    player["Batting Average"] = ba_avg.round(3)
-    player["Team name(s)"] = stint_players.map { |h| h["Team name(s)"] }.join(", ")
-
-    players.delete_if { |h| h["yearID"] == player["yearID"] && h["playerID"] == player["playerID"] && h["stint"] != player["stint"] }
+  to_result = []
+  players.each do |id, player_year|
+    player_year.each { |year, player| to_result << player }
   end
 
   @columns = @col_labels.each_with_object({}) do |col, h|
-    value_max_length = players.map { |g| g[col].to_s.size }.max || 0
+    value_max_length = to_result.map { |g| g[col].to_s.size }.max || 0
     h[col] = { label: col, width: [value_max_length, col.size].max }
   end
 
   write_divider
   write_header
   write_divider
-  players.sort_by { |player| player["Batting Average"] }.each { |h| write_line(h) }
+  to_result.sort_by { |player| player["Batting Average"] }.each { |h| write_line(h) }
   write_divider
 end
 player_sorter
