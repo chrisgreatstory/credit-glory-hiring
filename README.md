@@ -11,5 +11,5 @@ e.g.:
 
 ```ruby
 ruby main.rb "Batting.csv" "year and team name" "2015, New York Highlanders "
-ruby main.rb "/home/cephei/Work/hiring-exercises/Batting.csv" "team name" "New York Highlanders "
+ruby main.rb "/home/chris/Work/hiring-exercises/Batting.csv" "team name" "New York Highlanders "
 ```
